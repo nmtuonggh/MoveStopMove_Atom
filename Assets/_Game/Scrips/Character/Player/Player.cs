@@ -3,24 +3,34 @@ using UnityEngine;
 using UnityEngine.TextCore.Text;
 using UnityEngine.UIElements;
 
-public class Player : Character
+
+enum PlayerState
+{
+    Attacked, Attacking, Dead, Run, Idle
+}
+public class   Player : Character
 {
     private Vector3 moveVector;
     [SerializeField] private FixedJoystick _joystick;
 
-    bool isAttack = false;
-    bool isAttacking = false;
+    private PlayerState _state;
 
 
     protected override void Start()
     {
-        //base.Start();
-        ChangeAnim("idle");
+        base.Start();
+        OnInit();
+    }
+
+    void OnInit()
+    {
+        _state = PlayerState.Idle;
+        ChangeAnim(Constan.ANIM_IDLE);
     }
 
     protected override void Update()
     {
-        if (isAttack)
+        if (_state is PlayerState.Attacked || _state is PlayerState.Dead)
         {
             return;
         }
@@ -44,10 +54,7 @@ public class Player : Character
             Attack();
             timer = 0;
         }
-        if (Input.GetKeyDown(KeyCode.J))
-        {
-            Attack();
-        }
+        
     }
 
     public override void Run()
@@ -56,34 +63,44 @@ public class Player : Character
         moveVector = Vector3.zero;
         moveVector.x = _joystick.Horizontal * _moveSpeed * Time.deltaTime;
         moveVector.z = _joystick.Vertical * _moveSpeed * Time.deltaTime;
+        
         if (_joystick.Horizontal != 0 || _joystick.Vertical != 0)
         {
             StopAllCoroutines();
             isReadyAttack = true;
-            isAttacking = false;
+            _state = PlayerState.Run;
             timer = 0;
-            Vector3 direction = Vector3.RotateTowards(transform.forward, moveVector, _rotateSpeed * Time.deltaTime, 0.0f);
+            Vector3 direction =
+                Vector3.RotateTowards(transform.forward, moveVector, _rotateSpeed * Time.deltaTime, 0.0f);
             transform.rotation = Quaternion.LookRotation(direction);
-            ChangeAnim("run");
+            ChangeAnim(Constan.ANIM_RUN);
         }
-        else if (_joystick.Horizontal == 0 && _joystick.Vertical == 0 && !isAttacking)
+        else if (_joystick.Horizontal == 0 && _joystick.Vertical == 0)
         {
-            timer += Time.deltaTime;
-            ChangeAnim("idle");
+            if (_state is PlayerState.Attacked or PlayerState.Attacking)
+            {
+            }
+            else
+            {
+                timer += Time.deltaTime;
+                _state = PlayerState.Idle;
+                ChangeAnim(Constan.ANIM_IDLE);
+            }
+
+            transform.position = Vector3.Lerp(transform.position, transform.position + moveVector, 1f);
         }
-        transform.position = Vector3.Lerp(transform.position, transform.position + moveVector, 1f);
     }
 
     IEnumerator ResetAttack()
     {
         yield return new WaitForSeconds(attackTime);
-        isAttack = false;
-        isAttacking = false;
+        _state = PlayerState.Idle;
     }
+
     IEnumerator ActiveAttack()
     {
         yield return new WaitForSeconds(waitThrow);
-        isAttack = true;
+        _state = PlayerState.Attacked;
     }
     public override void Attack()
     {
@@ -92,7 +109,7 @@ public class Player : Character
             return;
         }
         base.Attack();
-        isAttacking = true;
+        _state = PlayerState.Attacking;
         StartCoroutine(ActiveAttack());
         StartCoroutine(ResetAttack());
     }
